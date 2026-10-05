@@ -1,197 +1,186 @@
-# LinkedIn Vault (prototype v0.1)
+# LinkedIn Vault
 
-Save useful LinkedIn technical posts in one tap. A Raspberry Pi archives the text, images, PDFs and
-linked papers to your external drive, writes an AI summary, and emails everything to you.
+Save useful LinkedIn technical posts with one click, before the feed washes them away. A Raspberry Pi
+keeps the text, images, original PDFs and videos together with the link back to the post, writes an AI
+summary, emails you a copy, and gives you a searchable dashboard, an "Ask your vault" assistant and a
+weekly digest.
+
+Everything is stored on your own hardware. Saving is always started by you (a click or a share); nothing
+browses or scrapes LinkedIn on its own.
 
 ```
-iPhone / iPad ──Share ▸ "Save to Vault" Shortcut──┐
-                                                    ├─ HTTPS over Tailscale ─▶  Pi: linkedin-vault (Docker)
-Personal PC Chrome ──"📥 Vault" button────────────┘                             │
-                                                     ┌──────────────────────────┼───────────────────────┐
-                                                     ▼                          ▼                       ▼
-                                          /mnt/vault (external HDD)     Email to your Gmail     /items web page
-                                          post.md, meta.json, images,   summary + attachments   (quick list)
-                                          PDFs, papers, vault.db
+Chrome (personal PC) ── 📥 Vault button ───────┐
+                                                ├─ HTTPS over Tailscale ─▶ Raspberry Pi (Docker)
+iPhone / iPad ── Share ▸ "Save to Vault" ──────┘                              │
+                                                     ┌────────────────────────┼─────────────────────┐
+                                                     ▼                        ▼                     ▼
+                                              USB drive (files)        Email to you          Dashboard
+                                              text, images, PDFs,      summary + PDF copy    search, Ask,
+                                              videos, search index     + attachments         weekly digest
 ```
+
+## What it saves
+
+| Post type | What is kept |
+|---|---|
+| Text and images | Full text, author, full-size images, link to the post, a PDF copy of the post |
+| Document posts (PDF carousels) | The original PDF and the text of every page |
+| Video posts | The MP4, a thumbnail and the captions as a transcript |
+| Posts with YouTube links | The link, title and thumbnail (YouTube videos are not downloaded) |
+| Posts linking to papers | arXiv PDFs, and open-access PDFs for DOI links (via Unpaywall); paywalled papers stay as links |
+
+## Features
+
+- **📥 Vault button** on every LinkedIn post (Chrome/Edge extension). If the Pi can't be reached, saves wait in a queue and are resent every 5 minutes.
+- **iPhone / iPad Shortcut** in the share sheet.
+- **Dashboard**: posts grouped by day, keyword filter, search across post text, document pages, transcripts and paper titles, delete button.
+- **Email per save** with the summary, PDF copy and attachments (up to `MAX_ATTACH_MB`).
+- **AI summary and tags** for each post (text plus the first two images).
+- **Ask your vault**: a question box; the assistant searches everything you saved and answers with `[#id]` links to the posts.
+- **Weekly digest** by email: themes, what to read first, links to your interests.
+
+The AI parts need an Anthropic API key. Without one, saving, the dashboard, plain search and a simple digest still work.
+
+## Repository layout
 
 | Folder | What |
 |---|---|
-| `backend/` | FastAPI capture API, SQLite queue, worker (fetch → download → papers → AI → vault → email), Docker files |
-| `extension/` | Chrome/Edge extension (Manifest V3) that adds a **📥 Vault** button to every post |
+| `backend/` | FastAPI app, SQLite queue and search index, worker, Docker files |
 | `backend/tests/` | Offline tests (`pytest -q`) |
+| `extension/` | Chrome/Edge extension (Manifest V3) |
 
----
+## Requirements
 
-## 1. Prepare the Pi
+- Raspberry Pi 4 or 5 (64-bit OS) with Docker, and a USB drive for storage
+- [Tailscale](https://tailscale.com) on the Pi and on each device you save from, with MagicDNS and HTTPS certificates turned on
+- Optional: a Gmail account with an app password (email), an Anthropic API key (AI)
 
-Works on a Pi 4 (4 GB+) or Pi 5 with 64-bit Raspberry Pi OS.
+## Setup
 
-### 1a. External drive
+### 1. Storage
 
-> ⚠️ Formatting erases the drive. Copy anything you need off it first.
+The app writes to `/mnt/usb1/linkedin-vault` (change the path in `backend/docker-compose.yml`). It refuses
+to start unless a marker file is there, so it can never fill the SD card when the drive is unplugged.
 
 ```bash
-lsblk -f                                   # find it, e.g. /dev/sda1
-sudo mkfs.ext4 -L vault /dev/sda1
-sudo mkdir -p /mnt/vault
-sudo blkid /dev/sda1                       # copy the UUID
-echo 'UUID=<uuid> /mnt/vault ext4 defaults,nofail,noatime 0 2' | sudo tee -a /etc/fstab
-sudo mount -a && df -h /mnt/vault
-sudo touch /mnt/vault/.vault-marker        # the app refuses to start if this file is missing
+sudo mkdir -p /mnt/usb1/linkedin-vault
+sudo touch /mnt/usb1/linkedin-vault/.vault-marker
 ```
 
-The marker file stops the app from writing to the SD card when the drive isn't mounted: the
-container keeps restarting until the drive is back. A 2.5" USB-powered drive needs the official
-Pi power supply or a powered USB hub.
-
-### 1b. Docker
+### 2. Configure
 
 ```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER && newgrp docker
-```
-
-### 1c. Install the app
-
-```bash
-# copy the linkedin-vault folder to the Pi (scp, USB stick, or git), then:
-cd linkedin-vault/backend
+cd backend
 cp .env.example .env
-openssl rand -hex 24          # paste the result into VAULT_TOKEN
-nano .env                     # fill in the keys (see sections 2 and 3)
-docker compose up -d --build
-docker compose logs -f        # look for "vault ready"
+openssl rand -hex 24      # paste the result into VAULT_TOKEN
+nano .env
+```
+
+| Setting | Purpose |
+|---|---|
+| `VAULT_TOKEN` | Required. The password the extension, Shortcut and dashboard use |
+| `ANTHROPIC_API_KEY`, `CLAUDE_MODEL` | AI summaries, Ask and digest |
+| `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_TO` | Email (Gmail app password) |
+| `PUBLIC_URL` | Your dashboard address, used for links in digest emails |
+| `INTERESTS` | Your focus areas, used by the digest and Ask |
+| `DIGEST_WEEKDAY`, `DIGEST_HOUR` | When the weekly digest is sent (default Monday 08:00) |
+| `LOG_ACCESS` | `quiet` (default) or `all` |
+
+Never commit `.env`; it is listed in `.gitignore`.
+
+### 3. Start
+
+```bash
+docker build --network host -t backend-vault .
+docker compose up -d --no-build
+docker compose logs -f                 # wait for "vault ready"
 curl http://127.0.0.1:8000/health
 ```
 
-### 1d. Tailscale (HTTPS for your devices)
+### 4. HTTPS through Tailscale
 
 ```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up --hostname vault-pi --advertise-tags=tag:vault
 sudo tailscale serve --bg http://127.0.0.1:8000
-tailscale serve status        # shows https://vault-pi.<your-tailnet>.ts.net
+tailscale serve status                 # shows https://<pi-name>.<tailnet>.ts.net
 ```
 
-In the Tailscale admin console:
+The app listens only on `127.0.0.1`, so Tailscale is the only way in.
 
-* **DNS**: turn on MagicDNS and HTTPS Certificates (needed for `tailscale serve`).
-* **Access controls**: keep the vault and the probe project apart. Merge this into your policy and
-  **keep your existing probe rules**:
+### 5. Dashboard
 
-```jsonc
-"tagOwners": { "tag:vault": ["autogroup:admin"], "tag:probe": ["autogroup:admin"] },
-"acls": [
-  { "action": "accept", "src": ["autogroup:member"], "dst": ["tag:vault:443"] },
-  { "action": "accept", "src": ["autogroup:member"], "dst": ["tag:probe:*"] }
-  // + your existing probe ↔ collector rules
-]
-```
+Open `https://<pi-name>.<tailnet>.ts.net/dashboard?token=YOUR_TOKEN` once on each device. The token is
+then kept in a cookie, so bookmark plain `/dashboard`.
 
-The app itself only listens on `127.0.0.1`, so the only way in is through Tailscale on port 443.
+### 6. Chrome extension
 
----
+Use a personal computer. Don't install it on a work laptop without IT approval; company proxies usually
+block the connection to the Pi anyway.
 
-## 2. Email (Gmail)
+1. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick the `extension/` folder.
+2. Click the extension icon, enter the Pi address and token, then **Save** and **Test**.
+3. On linkedin.com, click **📥 Vault** under any post.
 
-1. Create a separate Gmail account for the bot, e.g. `aaron.vault.bot@gmail.com`.
-2. Turn on 2-Step Verification for that account, then go to **Google Account → Security → App passwords**
-   and create one named "vault-pi".
-3. In `.env`: `SMTP_USER=` the bot address, `SMTP_PASSWORD=` the 16-character app password, and
-   `MAIL_TO=` your own Gmail.
-4. Optional: in your own Gmail, add a filter `subject:"[Vault]"` that applies the label **Vault**.
+### 7. iPhone / iPad Shortcut
 
-Each email contains the title, author, link, AI summary, tags, linked papers and full post text,
-with the images, PDFs and papers attached up to `MAX_ATTACH_MB` (20 MB). Anything larger stays on
-the drive and the email says so.
+In the Shortcuts app, create **Save to Vault**:
 
-## 3. AI summary (optional)
+1. In the shortcut's details, turn on **Show in Share Sheet**; receive **URLs** and **Text**.
+2. Add **Get Contents of URL**: URL `https://<pi-name>.<tailnet>.ts.net/link`, method **POST**, header
+   `X-Vault-Token` = your token, JSON body with `url` = **Shortcut Input** and `source` = `ios`.
+3. Add **Get Dictionary Value** (`message`) and **Show Notification**.
 
-Put an Anthropic API key in `ANTHROPIC_API_KEY`. The worker sends the post text plus the first two
-images, so infographics get summarized too. `CLAUDE_MODEL` sets the model; use any current model ID
-from docs.claude.com. Leave the key empty to skip summaries; everything else still works.
+A share from the phone sends only the link, so the Pi reads the public version of the post. Saving the
+same post later with the extension upgrades it to a full capture.
 
----
+## Everyday use
 
-## 4. iPhone / iPad: "Save to Vault" Shortcut
-
-Install Tailscale on the device and turn on **VPN On Demand** in the Tailscale app settings, so the
-tailnet is reachable whenever you share.
-
-In the **Shortcuts** app, tap **+** and build:
-
-1. Tap the **ⓘ** (Details) → turn on **Show in Share Sheet**. Set *Receives* to **URLs** and **Text** only.
-2. Add **Get Contents of URL**:
-   * URL: `https://vault-pi.<your-tailnet>.ts.net/link`
-   * Method: **POST**
-   * Headers: `X-Vault-Token` = *your VAULT_TOKEN*
-   * Request Body: **JSON**, field `url` (Text) = **Shortcut Input**, field `source` (Text) = `ios`
-3. Add **Get Dictionary Value**: key `message` from **Contents of URL**.
-4. Add **Show Notification** with the **Dictionary Value**.
-5. Name it **Save to Vault** and pick an icon.
-
-Use it from the LinkedIn app: on a post, tap **Send/Share → Share via… → Save to Vault**. You'll see
-"Saved to Vault ✓" and the email follows shortly after.
-
-> From an iPhone share, the Pi only receives a link. It reads the public version of the post. If
-> LinkedIn requires a login for that post, the item is saved as **link only** and the email says so.
-> Capturing the same post later with the Chrome extension upgrades it to a full capture.
-
----
-
-## 5. Chrome extension (personal PC)
-
-> Use this on a personal computer. Don't install it or Tailscale on your corporate laptop without IT
-> approval. On that laptop, use LinkedIn's own **⋯ → Save** and share from *Saved items* on your
-> phone later.
-
-1. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick the `extension/` folder.
-2. Click the extension icon, enter `https://vault-pi.<tailnet>.ts.net` and your token, then **Save** → allow → **Test**.
-3. On linkedin.com, every post gets a **📥 Vault** button next to Like / Comment / Repost / Send.
-   Click it and the button shows ✅ Saved. The extension expands "…more" first so the full text is captured.
-4. If the Pi can't be reached, captures wait in a local queue (the orange badge shows how many) and
-   are resent every 5 minutes or when you click **Send queued**.
-
----
-
-## 6. What lands on the drive
+**Logs**
 
 ```
-/mnt/vault/
-  vault.db                          # index + job queue
-  vault/2026-09-28_00012_one-sky-three-satellite-technologies/
-      post.md                       # readable page (Obsidian-friendly)
-      meta.json                     # everything structured
-      img_01.jpg ...                # full-resolution post images
-      document_01.pdf               # PDF carousel (when available)
-      paper_01_<title>.pdf          # arXiv / open-access papers found in the post
+capture received: #52 from chrome — lnkd.in/p/abc123 (queued)
+item #52 done: "RL Playbook for RAN" — pdf, 3 image(s), AI summary
+item #52 emailed (2.1 MB attached)
 ```
 
-Useful endpoints (all need the token, as the `X-Vault-Token` header or `?token=`):
+If you click 📥 Vault and no `received` line appears, the save never reached the Pi.
 
-* `GET /health`: drive mounted, email and AI enabled, queue counts (no token needed)
-* `GET /items?token=...`: a simple list of saved items with summaries
-* `POST /link` `{url}` and `POST /capture` `{url,text,author,images[],links[]}`
+**Update**
 
-Backup (recommended): `rclone sync /mnt/vault gdrive:linkedin-vault` from a nightly cron job.
+```bash
+cd backend
+docker build --network host -t backend-vault .
+docker compose up -d --no-build --force-recreate
+```
 
----
+A change to `.env` only needs the second command.
 
-## 7. Known limits of this prototype
+**Files on the drive**
 
-* **LinkedIn markup changes.** The extension has fallbacks, but if the button disappears, the selectors in
-  `content.js` need an update.
-* **PDF carousels.** LinkedIn often renders document posts as page images inside a viewer rather than
-  as a PDF link. Those pages are captured as images; a real PDF is saved only when a download link exists.
-* **Paywalled papers** (IEEE and others) are saved as links; only open-access PDFs are downloaded
-  (arXiv always, DOIs through Unpaywall).
-* Captures are processed one at a time with automatic retries (2 → 4 → 8 → 16 min, then marked failed).
-  Jobs interrupted by a reboot resume automatically.
+```
+/mnt/usb1/linkedin-vault/
+  vault.db                 queue and search index
+  vault/2026-10-01_00052_<title>/
+      post.pdf  post.md  meta.json  img_01.jpg  <document>.pdf  video_01.mp4  paper_01_<title>.pdf
+  digests/                 weekly digests (Markdown)
+  trash/                   deleted items (remove by hand when sure)
+```
 
-## 8. Development
+## Limits
+
+- LinkedIn changes its page layout from time to time. If the button disappears or links go missing, the
+  selectors in `extension/content.js` need an update.
+- Posts that need a login can only be captured in full by the extension, not by the phone Shortcut.
+- One save is processed at a time; failed steps are retried with growing delays.
+
+## Development
 
 ```bash
 cd backend
 pip install -r requirements.txt pytest
 pytest -q
 ```
+
+## Disclaimer
+
+A personal tool for keeping your own copy of posts you can already see. Respect LinkedIn's terms and the
+authors' copyright: don't republish saved content. Not affiliated with LinkedIn.
