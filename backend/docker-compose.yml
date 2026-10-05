@@ -1,0 +1,18 @@
+services:
+  vault:
+    build:
+      context: .
+      network: host                 # build uses the Pi's own network/DNS (avoids Tailscale DNS issues)
+    container_name: linkedin-vault
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - VAULT_DATA_DIR=/data
+      - TZ=America/Toronto
+    dns:                            # public DNS for downloads (container can't use Tailscale's 100.100.100.100)
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - /mnt/usb1/linkedin-vault:/data   # external USB drive
+    ports:
+      - "127.0.0.1:8000:8000"       # localhost only; Tailscale Serve publishes it on your tailnet

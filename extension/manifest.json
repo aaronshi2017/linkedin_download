@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Vault",
+  "version": "0.1.0",
+  "description": "Adds a one-click 'Save to Vault' button to LinkedIn posts and sends them to your Raspberry Pi.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": { "default_title": "LinkedIn Vault", "default_popup": "options.html" }
+}

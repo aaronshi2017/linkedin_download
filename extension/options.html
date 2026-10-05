@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LinkedIn Vault</title>
+<style>
+  body { font-family: system-ui, sans-serif; width: 360px; margin: 16px; color: #1f2328; }
+  h3 { margin: 0 0 12px; }
+  label { display: block; font-size: 12px; margin: 10px 0 4px; color: #555; }
+  input { width: 100%; box-sizing: border-box; padding: 7px; border: 1px solid #ccc; border-radius: 6px; }
+  .row { display: flex; gap: 8px; margin-top: 14px; }
+  button { flex: 1; padding: 8px; border: 0; border-radius: 6px; background: #0a66c2; color: #fff; cursor: pointer; }
+  button.secondary { background: #e7ecf1; color: #1f2328; }
+  #status { margin-top: 12px; font-size: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  <h3>📥 LinkedIn Vault</h3>
+  <label for="url">Pi address (Tailscale)</label>
+  <input id="url" placeholder="https://vault-pi.your-tailnet.ts.net">
+  <label for="token">Token (VAULT_TOKEN from the Pi .env)</label>
+  <input id="token" type="password">
+  <div class="row">
+    <button id="save">Save</button>
+    <button id="test" class="secondary">Test</button>
+    <button id="flush" class="secondary">Send queued</button>
+  </div>
+  <div id="status"></div>
+  <script src="options.js"></script>
+</body>
+</html>

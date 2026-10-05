@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LinkedIn Vault</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --ink: #1d2330; --muted: #667085; --line: #e4e7ec;
+    --accent: #0a66c2; --chip: #eef2f7; --chip-on: #0a66c2; --chip-on-ink: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1216; --card: #171b21; --ink: #e6e9ef; --muted: #98a2b3; --line: #262c35;
+            --accent: #5aa9ff; --chip: #222833; --chip-on: #5aa9ff; --chip-on-ink: #0f1216; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  .top { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0; white-space: nowrap; }
+  .count { color: var(--muted); font-size: 13px; }
+  input[type=search] { flex: 1; min-width: 180px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+                       background: var(--card); color: var(--ink); font-size: 15px; }
+  .chips { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; max-width: 1100px; margin: 10px auto 0; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips .chip { white-space: nowrap; flex: none; }
+  .chips.open { flex-wrap: wrap; max-height: 40vh; overflow-y: auto; }
+  .chip.more { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+  .chip { border: 0; border-radius: 999px; padding: 4px 10px; background: var(--chip); color: var(--ink); font-size: 13px; cursor: pointer; }
+  .chip.on { background: var(--chip-on); color: var(--chip-on-ink); }
+  .chip small { opacity: .7; margin-left: 3px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 40px; }
+  h2.day { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 22px 0 8px; }
+  .card { display: grid; grid-template-columns: 150px 1fr; gap: 14px; background: var(--card); border: 1px solid var(--line);
+          border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+  .thumb { width: 150px; height: 150px; border-radius: 10px; object-fit: cover; background: var(--chip); display: block; }
+  .noimg { width: 150px; height: 150px; border-radius: 10px; background: var(--chip); display: grid; place-items: center; font-size: 34px; }
+  .card > * { min-width: 0; }
+  .title { overflow-wrap: anywhere; font-weight: 650; font-size: 16px; color: var(--ink); text-decoration: none; }
+  .title:hover { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 13px; margin: 2px 0 6px; }
+  .summary { margin: 6px 0; padding-left: 18px; }
+  .summary li { margin: 2px 0; }
+  .excerpt { color: var(--muted); font-size: 14px; margin: 6px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .tags .chip { font-size: 12px; padding: 2px 8px; }
+  .find { font-size: 13px; color: var(--accent); text-decoration: none; margin-left: 6px; white-space: nowrap; }
+  .files { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; }
+  .files a { color: var(--accent); text-decoration: none; }
+  .del { float: right; border: 0; background: none; cursor: pointer; font-size: 16px; opacity: .45; padding: 2px 4px; }
+  .del:hover { opacity: 1; }
+  .badge { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: #fdecc8; color: #7a4b00; margin-left: 6px; }
+  .empty { color: var(--muted); text-align: center; padding: 60px 0; }
+  .ai { max-width: 1100px; margin: 12px auto 0; padding: 0 16px; }
+  .askrow { display: flex; gap: 8px; }
+  .askrow input { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 15px; }
+  .btn { border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: #fff; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  .btn.ghost { background: var(--chip); color: var(--ink); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-top: 10px; display: none; }
+  .panel.show { display: block; }
+  .panel h2, .panel h3 { font-size: 15px; margin: 14px 0 6px; }
+  .panel h2:first-child, .panel h3:first-child { margin-top: 0; }
+  .panel p, .panel li { font-size: 14.5px; }
+  .panel .steps { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .panel .close { float: right; border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+  a.cite { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .dlist a { display: block; padding: 6px 0; color: var(--accent); text-decoration: none; }
+  .card.flash { outline: 3px solid var(--accent); }
+  @media (max-width: 560px) {
+    .card { grid-template-columns: 1fr; }
+    .thumb { width: 100%; height: 200px; }
+    .noimg { width: 100%; height: 64px; font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>📥 LinkedIn Vault</h1>
+    <span class="count" id="count"></span>
+    <input type="search" id="q" placeholder="Search title, text, author, keyword…">
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+<section class="ai">
+  <div class="askrow">
+    <input id="ask" placeholder="🤖 Ask your vault… e.g. What have I saved about energy-saving rApps?" enterkeyhint="send">
+    <button class="btn" id="askBtn">Ask</button>
+    <button class="btn ghost" id="digBtn">📰 Digests</button>
+  </div>
+  <div class="panel" id="answer"></div>
+  <div class="panel" id="digests"></div>
+</section>
+<main id="list"><div class="empty">Loading…</div></main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let items = [], activeTag = null, chipsOpen = false;
+const TOP_CHIPS = 8;
+
+function dayLabel(iso) {
+  const d = new Date(iso);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function renderChips() {
+  const counts = {};
+  items.forEach((it) => it.tags.forEach((t) => (counts[t] = (counts[t] || 0) + 1)));
+  const tags = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  // collapsed: one line with the most used keywords (plus the selected one); "+N more" opens the full list
+  let shown = tags;
+  if (!chipsOpen && tags.length > TOP_CHIPS) {
+    shown = tags.slice(0, TOP_CHIPS);
+    if (activeTag) shown = [[activeTag, counts[activeTag] || 0]].concat(shown.filter(([t]) => t !== activeTag).slice(0, TOP_CHIPS - 1));
+  }
+  const hidden = tags.length - shown.length;
+  const more = chipsOpen && tags.length > TOP_CHIPS ? '<button class="chip more" data-more="1">Show fewer ▴</button>'
+    : hidden > 0 ? `<button class="chip more" data-more="1">+${hidden} more ▾</button>` : '';
+  $('chips').classList.toggle('open', chipsOpen);
+  $('chips').innerHTML =
+    `<button class="chip ${activeTag ? '' : 'on'}" data-tag="">All<small>${items.length}</small></button>` + (chipsOpen ? '' : more) +
+    shown.map(([t, n]) => `<button class="chip ${t === activeTag ? 'on' : ''}" data-tag="${esc(t)}">${esc(t)}<small>${n}</small></button>`).join('') + (chipsOpen ? more : '');
+}
+
+function matches(it, q) {
+  if (activeTag && !it.tags.includes(activeTag)) return false;
+  if (!q) return true;
+  const hay = [it.title, it.author, it.summary, it.excerpt, it.tags.join(' '), it.key_terms.join(' '),
+               it.papers.map((p) => p.title).join(' '), it.doc_text || '', it.transcript || '', (it.youtube || []).map((y) => y.title).join(' '), (it.document && it.document.title) || ''].join(' ').toLowerCase();
+  return q.split(/\s+/).every((w) => hay.includes(w));
+}
+
+function card(it) {
+  const img = it.images[0]
+    ? `<a href="${esc(it.images[0])}" target="_blank"><img class="thumb" loading="lazy" src="${esc(it.images[0])}" alt=""></a>`
+    : `<div class="noimg">${it.papers.length ? '📄' : '🔗'}</div>`;
+  const summary = it.summary
+    ? `<ul class="summary">${it.summary.split('\n').filter((l) => l.trim()).map((l) => `<li>${esc(l.replace(/^[-•]\s*/, ''))}</li>`).join('')}</ul>`
+    : (it.excerpt ? `<div class="excerpt">${esc(it.excerpt)}</div>` : '');
+  const files = [
+    ...(it.pdf ? [`<a href="${esc(it.pdf)}" target="_blank"><b>📰 Saved copy (PDF)</b></a>`] : []),
+    ...(it.pdf && it.url ? [`<a href="${esc(it.url)}" target="_blank">↗ LinkedIn</a>`] : []),
+    ...(it.videos || []).filter((v) => v.href).map((v) => `<a href="${esc(v.href)}" target="_blank"><b>▶ Video${v.duration ? ' (' + Math.floor(v.duration / 60) + ':' + String(Math.round(v.duration % 60)).padStart(2, '0') + ')' : ''}</b></a>`),
+    ...(it.youtube || []).map((y) => `<a href="${esc(y.url)}" target="_blank">▶ YouTube: ${esc(y.title).slice(0, 60)}</a>`),
+    ...(it.document && it.document.href ? [`<a href="${esc(it.document.href)}" target="_blank"><b>${it.document.original ? '📄 Original PDF' : '📑 Document'} (${esc(it.document.pages)} pages)</b></a>`] : []),
+    ...(it.document && it.document.search ? [`<a href="${esc(it.document.search)}" target="_blank">🔎 Find original PDF</a>`] : []),
+    ...it.papers.map((p) => p.href ? `<a href="${esc(p.href)}" target="_blank">📄 ${esc(p.title)}</a>`
+                                   : `<a href="${esc(p.page)}" target="_blank">🔗 ${esc(p.title)}</a>`),
+    ...it.documents.filter((d) => !(it.document && it.document.href === d.href)).map((d) => `<a href="${esc(d.href)}" target="_blank">📑 ${esc(d.name)}</a>`),
+    ...it.images.slice(1).map((u, i) => `<a href="${esc(u)}" target="_blank">🖼 image ${i + 2}</a>`)
+  ].join('');
+  const badge = it.status === 'link_only' ? '<span class="badge">link only</span>'
+              : it.status === 'failed' ? '<span class="badge">failed</span>'
+              : it.status === 'pending' || it.status === 'processing' ? '<span class="badge">processing…</span>' : '';
+  const time = new Date(it.captured).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return `<article class="card" id="item-${it.id}">${img}<div>
+      <button class="del" data-del="${it.id}" title="Remove from vault">🗑</button>
+      ${it.pdf ? `<a class="title" href="${esc(it.pdf)}" target="_blank" title="Open the saved copy (PDF)">${esc(it.title)}</a>`
+       : it.url ? `<a class="title" href="${esc(it.url)}" target="_blank">${esc(it.title)}</a>`
+               : `<span class="title">${esc(it.title)}</span> <a class="find" target="_blank" title="Search LinkedIn for this post"
+                   href="https://www.linkedin.com/search/results/content/?keywords=${encodeURIComponent((it.excerpt || it.title || '').split(/\s+/).slice(0, 10).join(' '))}">🔎 find on LinkedIn</a>`}${badge}
+      <div class="meta">${esc(it.author || '')}${it.author ? ' · ' : ''}saved ${time}${it.worth ? ' · worth reading: ' + esc(it.worth) : ''}</div>
+      ${summary}
+      <div class="tags">${it.tags.map((t) => `<button class="chip" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+      ${files ? `<div class="files">${files}</div>` : ''}
+    </div></article>`;
+}
+
+function render() {
+  renderChips();
+  const q = $('q').value.trim().toLowerCase();
+  const shown = items.filter((it) => matches(it, q));
+  $('count').textContent = `${shown.length} of ${items.length} saved`;
+  if (!shown.length) { $('list').innerHTML = '<div class="empty">Nothing matches.</div>'; return; }
+  let html = '', lastDay = '';
+  for (const it of shown) {
+    const day = dayLabel(it.captured);
+    if (day !== lastDay) { html += `<h2 class="day">${esc(day)}</h2>`; lastDay = day; }
+    html += card(it);
+  }
+  $('list').innerHTML = html;
+}
+
+document.addEventListener('click', async (e) => {
+  const d = e.target.closest('.del[data-del]');
+  if (d) {
+    const id = Number(d.dataset.del);
+    const it = items.find((x) => x.id === id);
+    if (!confirm(`Remove "${(it && it.title || '').slice(0, 80)}" from the vault?`)) return;
+    const r = await fetch('/api/items/' + id, { method: 'DELETE' });
+    if (r.ok) { items = items.filter((x) => x.id !== id); render(); } else alert('Could not delete (HTTP ' + r.status + ')');
+    return;
+  }
+  if (e.target.closest('.chip[data-more]')) { chipsOpen = !chipsOpen; renderChips(); return; }
+  const b = e.target.closest('.chip[data-tag]');
+  if (!b) return;
+  if (b.closest('#chips')) chipsOpen = false;   // picking a keyword folds the list again
+  const t = b.dataset.tag || null;
+  activeTag = (t === activeTag) ? null : t;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+$('q').addEventListener('input', render);
+// refresh every 30 s so new saves appear on their own
+setInterval(() => fetch('/api/items').then((r) => r.ok && r.json()).then((d) => {
+  if (d && d.length !== items.length) { items = d.sort((a, b) => b.captured.localeCompare(a.captured)); render(); }
+}).catch(() => {}), 30000);
+
+fetch('/api/items').then((r) => {
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}).then((data) => { items = data.sort((a, b) => b.captured.localeCompare(a.captured)); render(); })
+  .catch((e) => { $('list').innerHTML = `<div class="empty">Could not load items (${esc(e.message)}).</div>`; });
+
+// ---------------------------------------------------------------- AI: ask + digests
+const md = (h) => h;   // server returns ready HTML
+function closeBtn(id) { return `<button class="close" onclick="document.getElementById('${id}').classList.remove('show')">✕</button>`; }
+function flashCard(id) {
+  const c = document.getElementById('item-' + id);
+  if (!c) return;
+  activeTag = null; $('q').value = ''; render();
+  const el = document.getElementById('item-' + id);
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 2500);
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a.cite');
+  if (!a) return;
+  e.preventDefault(); flashCard(a.dataset.id);
+});
+async function ask() {
+  const q = $('ask').value.trim();
+  if (!q) return;
+  const p = $('answer'); $('askBtn').disabled = true;
+  p.classList.add('show'); p.innerHTML = closeBtn('answer') + '<p>🤖 Searching your vault…</p>';
+  try {
+    const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    p.innerHTML = closeBtn('answer') + d.html +
+      (d.sources.length ? '<h3>Sources</h3><ul>' + d.sources.map((s) => `<li><a class="cite" data-id="${s.id}" href="#">[#${s.id}]</a> ${esc(s.title)}</li>`).join('') + '</ul>' : '') +
+      (d.steps.length ? `<div class="steps">Agent steps: ${d.steps.map(esc).join(' → ')}</div>` : '');
+  } catch (err) { p.innerHTML = closeBtn('answer') + `<p>Could not answer: ${esc(err.message)}</p>`; }
+  $('askBtn').disabled = false;
+}
+$('askBtn').onclick = ask;
+$('ask').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
+
+async function showDigests() {
+  const p = $('digests'); p.classList.add('show');
+  const list = await (await fetch('/api/digests')).json();
+  p.innerHTML = closeBtn('digests') + `<button class="btn" id="digRun">Make a digest of the last 7 days</button>` +
+    (list.length ? '<div class="dlist" style="margin-top:10px">' + list.map((d) => `<a href="#" data-dname="${esc(d.name)}">📰 ${esc(d.title)}</a>`).join('') + '</div>'
+                 : '<p>No digests yet — one is emailed every week, or make one now.</p>');
+  $('digRun').onclick = async () => {
+    $('digRun').disabled = true; $('digRun').textContent = '⏳ Writing digest… (up to a minute)';
+    const d = await (await fetch('/api/digest/run?days=7', { method: 'POST' })).json();
+    p.innerHTML = closeBtn('digests') + d.html + `<p class="steps">${d.emailed ? 'Also emailed to you.' : ''}</p>`;
+  };
+}
+document.addEventListener('click', async (e) => {
+  const a = e.target.closest('a[data-dname]');
+  if (!a) return;
+  e.preventDefault();
+  const d = await (await fetch('/api/digests/' + encodeURIComponent(a.dataset.dname))).json();
+  $('digests').innerHTML = closeBtn('digests') + d.html;
+});
+$('digBtn').onclick = showDigests;
+</script>
+</body>
+</html>

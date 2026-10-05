@@ -1,0 +1,17 @@
+.vault-btn {
+  margin-left: 6px;
+  padding: 6px 10px;
+  border: 1px solid #0a66c2;
+  border-radius: 16px;
+  background: #fff;
+  color: #0a66c2;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  align-self: center;
+}
+.vault-btn:hover { background: #eaf3fc; }
+.vault-btn:disabled { opacity: .7; cursor: default; }
+.vault-btn.vault-ok { border-color: #057642; color: #057642; }
+.vault-btn.vault-warn { border-color: #b45309; color: #b45309; }
