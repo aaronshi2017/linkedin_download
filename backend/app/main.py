@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
     stop.set()
 
 
-app = FastAPI(title="LinkedIn Vault", version="0.17.0", lifespan=lifespan)
+app = FastAPI(title="LinkedIn Vault", version="0.19.0", lifespan=lifespan)
 
 
 def _ok(supplied: str) -> bool:

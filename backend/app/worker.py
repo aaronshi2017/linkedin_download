@@ -67,6 +67,8 @@ def process(row) -> None:
     url_slug = re.sub(r"^https?://(www\.)?", "", url or "").split("?")[0]
     first_line = text.strip().splitlines()[0] if text.strip() else (author or url_slug or "post")
     folder = config.VAULT_DIR / f"{dt.date.today().isoformat()}_{row['id']:05d}_{slugify(first_line)}"
+    if row["folder"] and Path(row["folder"]).is_dir():
+        folder = Path(row["folder"])  # re-save of an existing item: update it in place
     folder.mkdir(parents=True, exist_ok=True)
 
     # 3) images + documents (LinkedIn media URLs expire → download now)
@@ -109,6 +111,8 @@ def process(row) -> None:
                     (f"https://www.google.com/search?q={quote_plus(query + ' filetype:pdf')}" if query else None)}
         if docs:
             document["file"] = docs[0].name
+            for stale in [folder / "document.pdf", *folder.glob("doc_page_*")]:  # left over from a blurry earlier save
+                stale.unlink(missing_ok=True)
         else:
             dpdf = pdfgen.safe_build_document(folder, page_files, document)
             document["file"] = dpdf.name if dpdf else None

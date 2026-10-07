@@ -89,6 +89,16 @@ def make_key(url: Optional[str], text: Optional[str] = None, extra: str = "") ->
     return "txt:" + hashlib.sha1(blob.encode()).hexdigest()[:16]
 
 
+def _has_original(folder) -> bool:
+    """True if the saved item already holds a real document file (not one rebuilt from page pictures)."""
+    try:
+        from pathlib import Path
+        m = json.loads((Path(folder) / "meta.json").read_text(encoding="utf-8"))
+        return bool((m.get("document") or {}).get("original")) or (bool(m.get("documents")) and not m.get("document"))
+    except Exception:
+        return False
+
+
 def enqueue(key: str, url: Optional[str], source: str, payload: dict) -> dict:
     now = time.time()
     with _lock, connect() as con:
@@ -102,6 +112,10 @@ def enqueue(key: str, url: Optional[str], source: str, payload: dict) -> dict:
         # Already known. A richer capture (from the extension) upgrades a link-only item.
         old = json.loads(row["payload"] or "{}")
         richer = bool(payload.get("text")) and not old.get("text")
+        # a re-save that brings the original PDF (or a video) the stored copy lacks also upgrades it
+        if not richer and row["status"] in ("done", "link_only"):
+            richer = (bool(payload.get("documents")) and not _has_original(row["folder"])) or \
+                     (bool(payload.get("videos")) and not old.get("videos"))
         if richer or payload.get("force"):
             con.execute(
                 "UPDATE items SET payload=?, status='pending', attempts=0, next_try_at=0, emailed=0, updated_at=? WHERE id=?",
